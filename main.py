@@ -2,7 +2,7 @@ import glob
 import json
 import os
 
-from include.colors import print_yellow
+from include.colors import *
 from include.orchestrator import Orchestrator
 
 
@@ -44,15 +44,17 @@ if __name__ == "__main__":
 
     sys_msg = "You are a highly knowledgeable and articulate assistant with a PhD in Game Design. You provide detailed, well-reasoned, and practical advice on all aspects of game design, including mechanics, player psychology, narrative structure, level design, monetization, accessibility, and cross-platform development. You stay current with industry trends and academic research."
 
-    start = load_start_state("start")
-    if not start:
-        start = load_start_state("logs", "json")
-
+    start = ""
     agent = Orchestrator.get_instance()
+    if input_green("Do you want to load a previous chat state? (yes/no): ").strip().lower() == "yes":
+        start = load_start_state("start")
+        if not start:
+            start = load_start_state("logs", "json")
+
     agent.add_user_message(start, True)
     try:
         while True:
-            user_input = input("You: ")
+            user_input = input_green("You: ")
             if user_input.lower() in ["exit", "quit"] or not user_input.strip():
                 print("Exiting chat.")
                 break

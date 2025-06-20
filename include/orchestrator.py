@@ -1,6 +1,6 @@
 from threading import Thread, Lock
 from include.agent import AIAgent
-from include.colors import print_yellow, print_blue
+from include.colors import *
 
 
 class Orchestrator(AIAgent):
@@ -15,23 +15,15 @@ class Orchestrator(AIAgent):
     def __init__(self, model="o4-mini"):
         super().__init__(model)
         self.set_subject("AI Agents Orchestrator")
+        self.messages = [{"role": "user",
+                          "content": "You are not supposed to answer the questions directly, you have to pass on to"
+                                     " multiple specialized agents. Your role is to orchestrate the agents and manage"
+                                     " their interactions and make sure to have agents from different areas so the"
+                                     " project has all the necessary information. Make sure to tell the agents to save"
+                                     " the files of the project like scripts, documentation and configs and search the"
+                                     " internet when needed by using tools."}]
+        self.start_count = len(self.messages)
         self.functions += [
-            {
-                "type": "function",
-                "function": {
-                    "name": "add_agent",
-                    "description": "Adds a new AI agent with a specific subject.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "subject": {"type": "string", "description": "The subject for the new agent"},
-                            "model": {"type": "string", "description": "The model to use for the agent",
-                                      "default": "o4-mini"}
-                        },
-                        "required": ["subject"]
-                    }
-                }
-            },
             {
                 "type": "function",
                 "function": {
@@ -65,21 +57,20 @@ class Orchestrator(AIAgent):
         ]
         self.agents = {}
 
-    def add_agent(self, subject, model="o4-mini"):
-        if subject:
-            print_blue(f"Adding agent with subject: {subject} and model: {model}")
-            agent = AIAgent(model)
-            agent.set_subject(subject)
-            self.agents[subject] = agent
-
     def send_to_agent(self, agent_subject, message):
         agent = self.agents.get(agent_subject)
         if not agent:
-            return f"No agent found with subject: {agent_subject}"
+            agent = AIAgent(self.model)
+            agent.set_subject(agent_subject)
+            self.agents[agent_subject] = agent
+        if not message:
+            print_yellow("No message provided to send to the agent.")
+            return "No message provided."
 
-        print_blue(f"Sending message to agent '{agent_subject}': {message}")
-        agent.add_user_message(message)
-        return agent.chat(message)
+        print_orange(f"Sending message to agent '{agent_subject}': {message}")
+        answer = agent.chat(message)
+        self.add_user_message(f"Agent '{agent_subject}' response: {answer}")
+        return answer
 
     def broadcast(self, message):
         threads = []
@@ -89,7 +80,7 @@ class Orchestrator(AIAgent):
             agent.add_user_message(message)
             responses[subject] = agent.chat(message)
 
-        print_blue(f"Broadcasting message to all agents: {message}")
+        print_orange(f"Broadcasting message to all agents: {message}")
 
         for subject, agent in self.agents.items():
             t = Thread(target=agent_thread, args=(subject, agent))

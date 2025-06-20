@@ -1,11 +1,15 @@
 import datetime
 import json
 import os
+import traceback
+from urllib.parse import quote_plus
+
 import openai
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from include.colors import print_blue, print_yellow
+from include.colors import *
 from include.helpers import file_safe_name
 
 load_dotenv()
@@ -21,25 +25,27 @@ client = openai.OpenAI()
 
 class AIAgent:
     def __init__(self, model="o4-mini"):
-        self.model = model
-        self.subject = "General AI Assistant"
-        self.messages = []
         self.create = client.chat.completions.create
+        self.model = model
+        self.set_subject("General AI Assistant")
+        self.messages = [{"role": "user",
+                          "content": "Make sure to save the files of the project like scripts, documentation and configs and search the internet when needed by using tools."}]
+        self.start_count = len(self.messages)
         self.functions = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "fetch_external_info",
-                    "description": "Fetches online external information for a given query.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "The search query"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
+            # {
+            #     "type": "function",
+            #     "function": {
+            #         "name": "fetch_external_info",
+            #         "description": "Fetches online external information for a given query.",
+            #         "parameters": {
+            #             "type": "object",
+            #             "properties": {
+            #                 "query": {"type": "string", "description": "The search query"}
+            #             },
+            #             "required": ["query"]
+            #         }
+            #     }
+            # },
             {
                 "type": "function",
                 "function": {
@@ -64,19 +70,19 @@ class AIAgent:
             base_prompt = f"You are a {personality} {subject} assistant."
         if expertise:
             base_prompt += f" Your expertise level is {expertise}."
-        self.subject = subject
+        self.subject = file_safe_name(subject).lower()
         if os.path.exists("agents/subject_cache.json"):
             with open("agents/subject_cache.json", "r", encoding="utf-8") as f:
                 subject_cache = json.load(f) or {}
         else:
             subject_cache = {}
-        if subject not in subject_cache:
-            subject_cache[subject] = self.send_no_history(
+        if self.subject not in subject_cache:
+            subject_cache[self.subject] = self.send_no_history(
                 f"give me the best system message for this base system message: '{base_prompt}' without any titles and responses, only the system message",
                 "gpt-4.1")
             with open("agents/subject_cache.json", "w", encoding="utf-8") as f:
                 json.dump(subject_cache, f, indent=4, ensure_ascii=False)
-        self.set_system_message(subject_cache[subject])
+        self.set_system_message(subject_cache[self.subject])
 
     def set_system_message(self, system_message):
         self.system_message = [{"role": "system", "content": system_message}]
@@ -94,7 +100,7 @@ class AIAgent:
             for _ in range(5):
                 self.add_user_message(f"Make 10 unique suggestions for the following prompt: '{prompt}'")
                 answer = self.send()
-                print_blue(answer)
+                print_orange(answer)
             self.add_user_message(
                 "Get the best ideas from all suggestions based on coolness, quality, and odds of success, and merge them in a final idea. Elaborate the idea and write it without any explanation.")
             return self.send("gpt-4.1")
@@ -102,7 +108,7 @@ class AIAgent:
         return self.send("gpt-4.1")
 
     def send(self, model=None):
-        print_blue(f"{self.subject} Thinking...")
+        print_orange(f"{self.subject} Thinking...")
         response = self.create(
             model=model or self.model,
             messages=self.system_message + self.messages,
@@ -112,13 +118,15 @@ class AIAgent:
         answer = choice.message.content or ""
         if choice.finish_reason == "tool_calls":
             for call in choice.message.tool_calls:
+                if answer:
+                    answer += "\n\n"
                 answer += self.parse_function_call(call)
         if answer:
             self.messages.append({"role": "assistant", "content": answer})
         return answer
 
     def send_no_history(self, prompt, model=None):
-        print_blue(f"{self.subject} Thinking...")
+        print_orange(f"{self.subject} Thinking...")
         response = self.create(
             model=model or self.model,
             messages=[{"role": "user", "content": prompt}]
@@ -126,39 +134,47 @@ class AIAgent:
         return response.choices[0].message.content
 
     def fetch_external_info(self, query):
-        """Fetches external information for the given query."""
-        url = f"https://api.duckduckgo.com/?q={query}&format=json"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            abstract = data.get("AbstractText", "")
-            return abstract or "No relevant information found."
-        return "Failed to fetch external information."
+        """Fetches external information for the given query and returns markdown-formatted string."""
+        safe_query = quote_plus(query)
+        url = f"https://www.google.com/search?q={safe_query}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
+
+            # remove HTML tags and extract text
+            soup = BeautifulSoup(response.text, "html.parser")
+            strip_html_text = soup.get_text(separator="\n").strip()
+
+            return strip_html_text or "No results found."
+        except requests.exceptions.RequestException as e:
+            return f"Error fetching external information. {e}"
 
     def save_content_to_file(self, content, filepath):
         """Saves content to a file. Add 'root' folder to filepath if not present."""
-        print_blue(f"Saving content to file: {filepath}")
         if not filepath.startswith("root" + os.sep):
             filepath = os.path.join("root", filepath)
 
         if not content:
             print_yellow("No content to save.")
             return
-        if not filepath.endswith(".txt"):
-            filepath += ".txt"
         if not os.path.exists(os.path.dirname(filepath)):
             os.makedirs(os.path.dirname(filepath))
-        print_blue(f"Saving content to {filepath}...")
+        print_orange(f"Saving content to {filepath}...")
         # Ensure the content is a string
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
+        return f"Content saved to {filepath}."
 
     def close(self):
         if len(self.messages) > self.start_count:
-            print_blue("Saving conversation history...")
+            print_orange("Saving conversation history...")
             self.save_conversation()
         else:
-            print_blue("No conversation history to save.")
+            print_orange("No conversation history to save.")
         print_yellow("Goodbye!")
 
     def save_conversation(self):
@@ -179,8 +195,16 @@ class AIAgent:
             func = getattr(self, function_name)
             if callable(func):
                 try:
-                    result = func(**kwargs)
-                    return result
+                    return func(**kwargs) or "Function executed successfully, but no result returned."
                 except Exception as e:
-                    return f"\n\nError calling function `{function_name}`: {str(e)}"
-        return f"\n\nFunction `{function_name}` not found or not callable."
+                    traceback.print_exc()
+                    return f"Error calling function `{function_name}`: {str(e)}"
+        return f"Function `{function_name}` not found or not callable."
+
+
+if __name__ == "__main__":
+    os.chdir("../")
+    agent = AIAgent()
+    answer = agent.fetch_external_info("bitcoin")
+    print_yellow(f"Fetched info: {answer}")
+    agent.close()
