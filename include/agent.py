@@ -24,7 +24,7 @@ client = openai.OpenAI()
 
 
 class AIAgent:
-    def __init__(self, model="o4-mini"):
+    def __init__(self, model="gpt-4o-mini"):
         self.create = client.chat.completions.create
         self.model = model
         self.set_subject("General AI Assistant")
@@ -79,7 +79,7 @@ class AIAgent:
         if self.subject not in subject_cache:
             subject_cache[self.subject] = self.send_no_history(
                 f"give me the best system message for this base system message: '{base_prompt}' without any titles and responses, only the system message",
-                "gpt-4.1")
+                "gpt-4-turbo")
             with open("agents/subject_cache.json", "w", encoding="utf-8") as f:
                 json.dump(subject_cache, f, indent=4, ensure_ascii=False)
         self.set_system_message(subject_cache[self.subject])
@@ -103,9 +103,9 @@ class AIAgent:
                 print_orange(answer)
             self.add_user_message(
                 "Get the best ideas from all suggestions based on coolness, quality, and odds of success, and merge them in a final idea. Elaborate the idea and write it without any explanation.")
-            return self.send("gpt-4.1")
+            return self.send("gpt-4-turbo")
         self.add_user_message(prompt)
-        return self.send("gpt-4.1")
+        return self.send("gpt-4-turbo")
 
     def send(self, model=None):
         print_orange(f"{self.subject} Thinking...")

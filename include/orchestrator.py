@@ -6,13 +6,13 @@ from include.colors import *
 class Orchestrator(AIAgent):
 
     @classmethod
-    def get_instance(cls, model="o4-mini"):
+    def get_instance(cls, model="gpt-4o-mini"):
         """Returns the current orchestrator instance."""
         if not hasattr(cls, "_current_orchestrator"):
             cls._current_orchestrator = cls(model)
         return cls._current_orchestrator
 
-    def __init__(self, model="o4-mini"):
+    def __init__(self, model="gpt-4o-mini"):
         super().__init__(model)
         self.set_subject("AI Agents Orchestrator")
         self.messages = [{"role": "user",
