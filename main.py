@@ -42,16 +42,14 @@ if __name__ == "__main__":
     print_yellow("Type 'exit' or 'quit' to end the chat.")
     print_yellow("You can also type an empty message to exit.")
 
-    sys_msg = "You are a highly knowledgeable and articulate assistant with a PhD in Game Design. You provide detailed, well-reasoned, and practical advice on all aspects of game design, including mechanics, player psychology, narrative structure, level design, monetization, accessibility, and cross-platform development. You stay current with industry trends and academic research."
-
-    start = ""
     agent = Orchestrator.get_instance()
+    
     if input_green("Do you want to load a previous chat state? (yes/no): ").strip().lower() == "yes":
         start = load_start_state("start")
         if not start:
             start = load_start_state("logs", "json")
-
-    agent.add_user_message(start, True)
+        agent.add_user_message(start, True)
+    
     try:
         while True:
             user_input = input_green("You: ")

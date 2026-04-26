@@ -1,0 +1,1 @@
+I want to create a simple Python web scraper that extracts news titles from a website and saves them to a text file. Please research the best libraries to use and then provide the implementation.

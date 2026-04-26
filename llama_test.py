@@ -1,42 +1,41 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, logging
-import torch
-logging.set_verbosity_error()  # Only show errors (no warnings or info)
+# Test script for local GGUF model
+import os
+from dotenv import load_dotenv
+from llama_cpp import Llama
 
+load_dotenv()
 
-model_id = "meta-llama/Llama-3.1-8B-Instruct"
+MODEL_PATH = r"E:\llm-models\lmstudio-community\gemma-4-26B-A4B-it-GGUF\gemma-4-26B-A4B-it-Q4_K_M.gguf"
 
-# Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+print(f"Loading model from {MODEL_PATH}...")
+try:
+    llm = Llama(
+        model_path=MODEL_PATH,
+        n_ctx=2048,
+        n_gpu_layers=-1,
+        verbose=True
+    )
+    print("\n" + "="*50)
+    print("Model loaded successfully!")
+    print("="*50 + "\n")
 
-# Load model directly to GPU
-model = AutoModelForCausalLM.from_pretrained(
-    model_id,
-    device_map={"": "cuda"},          # force placement on GPU
-    torch_dtype=torch.float16         # float16 for performance
-)
-
-# Confirm model is on GPU
-print(next(model.parameters()).device)  # should print: cuda:0
-
-# Set up text generation
-pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
-prompt = input("Enter a prompt: ")
-history = str(prompt)
-# Run it
-while True:
-    try:
-        # Example prompt
-        if not prompt.strip():
-            print("Exiting...")
+    while True:
+        prompt = input("Enter a prompt (or 'exit' to quit): ")
+        if prompt.lower() in ["exit", "quit", ""]:
             break
-        else:
-            print("\n|- Generating response...\n")
-            response = pipe(history, max_new_tokens=1024, do_sample=True, temperature=0.7, return_full_text=False)
-            for item in response:
-                print(item["generated_text"])
-                # history += " " + item["generated_text"]
-    except KeyboardInterrupt:
-        print("Exiting...")
-        break
-    except Exception as e:
-        print(f"An error occurred: {e}")
+            
+        print("\n|- Generating response...\n")
+        output = llm(
+            f"User: {prompt}\nAssistant: ",
+            max_tokens=1024,
+            stop=["User:", "\n\n"],
+            echo=False
+        )
+        print(output["choices"][0]["text"])
+        print("\n" + "-"*30 + "\n")
+
+except Exception as e:
+    print(f"\nError: {e}")
+    print("\nNote: Gemma 4 is a very new architecture. If you see 'unknown model architecture',")
+    print("it means llama-cpp-python needs to be updated to a version that supports it.")
+    print("In the meantime, you can use LM Studio's Local Server mode which is supported in include/agent.py.")
